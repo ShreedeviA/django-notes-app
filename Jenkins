@@ -1,0 +1,51 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone') {
+            steps {
+                echo 'clone the code'
+                git branch: 'main', url: 'https://github.com/ShreedeviA/django-notes-app.git'
+            }
+        }
+
+        stage ("build the image"){
+            steps {
+                echo "build the image"
+                sh "docker build -t notes-app ."
+            }
+        }
+
+        stage("Push to Docker Hub") {
+            steps {
+                echo "Pushing the image to Docker Hub"
+                withCredentials([usernamePassword(credentialsId: "docker", usernameVariable: "dockerHubUser", passwordVariable: "dockerHubPass")]) {
+                    sh '''
+                        echo "$dockerHubPass" | docker login -u "$dockerHubUser" --password-stdin
+                        docker tag notes-app $dockerHubUser/notes-app:latest
+                        docker push $dockerHubUser/notes-app:latest
+                    '''
+            }
+        }
+        
+        
+      
+        stage("Deploy the code") {
+            steps {
+                echo "Deploy the code"
+                script {
+                    dir("notesapp"){
+                        withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'kubernetes', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                        sh "kubectl delete --all pods"
+                        sh "kubectl apply -f deployment.yaml"
+                        sh "kubectl apply -f service.yaml"
+                        }
+                    }
+                }
+                  
+                
+            }
+        }
+    }
+}
+
